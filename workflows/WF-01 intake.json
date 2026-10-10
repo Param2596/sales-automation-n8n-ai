@@ -1,0 +1,86 @@
+{
+  "name": "WF-01 intake",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        -448,
+        64
+      ],
+      "id": "d02ff5ee-1258-4b6e-ae4b-5ace0de8cb61",
+      "name": "Webhook",
+      "webhookId": "2fe08759-1b31-4e9a-bbe0-6fae417e291f"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Input: $input.first().json.body\nconst b = $input.first().json.body ?? {};\nconst errors = [];\nfor (const f of ['name', 'email', 'company']) if (!b[f]) errors.push(`${f} is required`);\n// For email format, use a library in scripts/ or n8n's built-in check later; do not hand-write regex.\nreturn [{ json: { ...b, valid: errors.length === 0, errors } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -144,
+        64
+      ],
+      "id": "8113514e-0ed4-41fc-8c0a-e835332787a0",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        128,
+        -32
+      ],
+      "id": "f8fe9bd2-7fa7-41ef-8ab7-dadb745c5257",
+      "name": "Respond to Webhook"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "b315f1d0-376e-4311-9e93-7773ca1f163f",
+  "meta": {
+    "instanceId": "1e15df1235ca01bba0f09571b6baee0756bb21ca4c3e6bcbcf2c14e6912fb688"
+  },
+  "nodeGroups": [],
+  "id": "fz6i57gKSkm623vw",
+  "tags": []
+}
