@@ -2,17 +2,25 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>test webpage</title>
+  <title>Lead intake</title>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 520px; margin: 40px auto; }
+    body { font-family: system-ui, sans-serif; max-width: 520px; margin: 40px auto; padding: 0 16px; color: #1a1a1a; }
+    p.note { color: #444; font-size: 0.95rem; }
     label { display: block; margin-top: 12px; font-weight: 600; }
     input, select, textarea { width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box; }
     button { margin-top: 16px; padding: 10px 16px; }
     pre { background: #f4f4f4; padding: 12px; white-space: pre-wrap; }
+    code { font-size: 0.95em; }
   </style>
 </head>
 <body>
-  <h1>Lead Intake</h1>
+  <h1>Lead intake</h1>
+  <p class="note">
+    Local demo for SOC, MDR, EDR, DLP, Email Security, Pentest, and Incident Response.
+    The form POSTs JSON to the n8n webhook with header <code>X_API_KEY</code>.
+    The key below is a placeholder. Set it to the same value as the n8n Header Auth credential.
+    Keep a real key out of any page you deploy.
+  </p>
   <form id="lead-form">
     <label>Name <input name="name" required /></label>
     <label>Email <input name="email" type="email" required /></label>
@@ -31,7 +39,7 @@
 
   <script>
     const WEBHOOK_URL = "http://localhost:5678/webhook/lead";
-    const API_KEY = "dev-only-key"; // demo only; never ship a real key in browser code
+    const API_KEY = "dev-only-key"; // local placeholder; must match the n8n X_API_KEY credential
 
     document.getElementById("lead-form").addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -41,7 +49,7 @@
       try {
         const res = await fetch(WEBHOOK_URL, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "X-Api-Key": API_KEY },
+          headers: { "Content-Type": "application/json", "X_API_KEY": API_KEY },
           body: JSON.stringify(data),
         });
         const text = await res.text();
