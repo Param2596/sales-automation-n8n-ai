@@ -27,7 +27,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const source = $input.first().json.body ?? {};\nconst lead = {\n  name: typeof source.name === 'string' ? source.name.trim() : '',\n  email: typeof source.email === 'string' ? source.email.trim() : '',\n  company: typeof source.company === 'string' ? source.company.trim() : '',\n  website: typeof source.website === 'string' ? source.website.trim() : '',\n  service: typeof source.service === 'string' ? source.service.trim() : '',\n  message: typeof source.message === 'string' ? source.message.trim() : '',\n};\nconst errors = [];\nfor (const field of ['name', 'email', 'company']) {\n  if (!lead[field]) errors.push(`${field} is required`);\n}\nreturn [{ json: { ...lead, valid: errors.length === 0, errors } }];"
+        "jsCode": "const source = $input.first().json.body ?? {};\nconst lead = {\n  name: typeof source.name === 'string' ? source.name.trim() : '',\n  email: typeof source.email === 'string' ? source.email.trim() : '',\n  company: typeof source.company === 'string' ? source.company.trim() : '',\n  website: typeof source.website === 'string' ? source.website.trim() : '',\n  service: typeof source.service === 'string' ? source.service.trim() : '',\n  message: typeof source.message === 'string' ? source.message.trim() : '',\n};\nconst errors = [];\nfor (const field of ['name', 'email', 'company']) {\n  if (!lead[field]) errors.push(`${field} is required`);\n}\nif (lead.email && !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(lead.email)) {\n  errors.push('email is invalid');\n}\nreturn [{ json: { ...lead, valid: errors.length === 0, errors } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,

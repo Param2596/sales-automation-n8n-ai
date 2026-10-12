@@ -33,9 +33,11 @@ describe('validateLead', () => {
   });
 
   it('rejects a malformed email that is otherwise present', () => {
-    const result = validateLead({ ...validLead, email: 'not-an-email' });
-    assert.equal(result.valid, false);
-    assert.deepEqual(result.errors, ['email is invalid']);
+    for (const email of ['not-an-email', 'foo@bar', 'a@b', 'asha @acme.io']) {
+      const result = validateLead({ ...validLead, email });
+      assert.equal(result.valid, false, email);
+      assert.deepEqual(result.errors, ['email is invalid']);
+    }
   });
 
   it('rejects a non-object payload', () => {
