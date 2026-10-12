@@ -1,14 +1,18 @@
 {
   "name": "sales-automation-n8n-ai",
   "version": "1.0.0",
-  "description": "",
+  "description": "Lead intake for an MSSP sales team: authenticated n8n webhook, validation, Salesforce Lead create.",
   "main": "index.js",
   "directories": {
     "doc": "docs",
     "test": "tests"
   },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test tests/validate.test.mts tests/salesforce-auth.test.mts tests/workflow-contract.test.mts",
+    "salesforce:token": "node --experimental-strip-types --disable-warning=ExperimentalWarning scripts/salesforce/auth.mts"
   },
   "keywords": [],
   "author": "",
