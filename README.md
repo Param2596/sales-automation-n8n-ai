@@ -25,14 +25,14 @@ Solid lines are in `workflows/WF-01-intake.json`. The dashed step is roadmap.
 
 | Piece | Where | Behavior |
 |---|---|---|
-| Lead form | `web/form.html` | POSTs JSON to `http://localhost:5678/webhook/lead` with header `X_API_KEY` |
+| Lead form | `web/form.html` | POSTs JSON to `http://localhost:5678/webhook/lead` with header `X_API_KEY` from the password field. `?key=` can prefill that field |
 | Intake workflow | `workflows/WF-01-intake.json` | Header Auth, validate, IF on `$json.valid`, 400 or Salesforce create, then 201 |
 | CLI test lead | `scripts/cli/send-test-lead.ps1` | Reads `INTAKE_KEY` from the environment or `.env` and sends the same header |
 | Salesforce token client | `scripts/salesforce/auth.mts` | OAuth 2.0 client-credentials token fetch, cached in memory |
-| Stricter lead check | `scripts/intake/validate.mts` | Same required fields as the workflow, plus zod email format |
+| Lead validation | `scripts/intake/validate.mts` and the workflow Code node | Required name, email, and company, plus the same basic email format check |
 | Tests | `tests/` and `.github/workflows/ci.yml` | `node:test` against local mocks. No live Salesforce or n8n |
 
-The workflow Code node checks that `name`, `email`, and `company` are non-empty after trim. It does not check email format. `validate.mts` does, and CI covers it. n8n does not load this package, so a present-but-malformed email still passes the webhook.
+A lead missing name, email, or company, or with an email that fails that format check, returns 400 and is not sent to Salesforce. CI covers the check in `validate.mts`, and the workflow Code node uses the same pattern.
 
 A failed Salesforce call does not yet return a formatted error body. The execution fails, and the error-workflow path is roadmap.
 
@@ -60,7 +60,7 @@ Send a test lead:
 .\scripts\cli\send-test-lead.ps1
 ```
 
-The script reads `.env` and does not override variables already set in the session. Or open `web/form.html` and submit it. Change the `API_KEY` placeholder in that file to your local key first.
+The script reads `.env` and does not override variables already set in the session. Or open `web/form.html`, enter that same key in the API key field, and submit. `?key=` on the page URL prefills the field for a local session. Keep that value out of git and out of any URL you share.
 
 Check the token client without printing the access token:
 
@@ -81,7 +81,7 @@ workflows/WF-01-intake.json    n8n export
 web/form.html                  local intake form
 scripts/cli/send-test-lead.ps1 authenticated test POST
 scripts/salesforce/auth.mts    client-credentials token fetch
-scripts/intake/validate.mts   zod lead check used by tests
+scripts/intake/validate.mts   lead check shared with the workflow
 tests/                         node:test, mocks only
 docs/salesforce-setup.md       External Client App and n8n credential
 .env.example                   variable names, empty values
@@ -96,26 +96,15 @@ docs/salesforce-setup.md       External Client App and n8n credential
 
 ## Security
 
-- The committed form key `dev-only-key` is a local placeholder. A page you deploy needs a server-side hold on the real key.
+- The form reads the webhook key from a password field. `?key=` only prefills that field in the browser. The committed page has no key. A page you deploy should keep the key on the server.
 - `scripts/salesforce/auth.mts` prints `instance_url` only.
 - The Salesforce host in the workflow is `your-org.my.salesforce.com`. Put the real My Domain on your machine after import.
 - CI has no Salesforce, n8n, or LLM credentials. Tests point the token client at `127.0.0.1`.
 
 ## Roadmap
 
-- [ ] Reject malformed emails inside the n8n Code node, using the same zod rules as `scripts/intake/validate.mts`
 - [ ] Dedupe and idempotent Lead upsert (`External_Lead_Id__c`, SOQL lookup)
 - [ ] LLM lead scoring with structured JSON output
 - [ ] Slack or email alert for hot leads
 - [ ] Error workflow, retries, and a dead-letter replay
 - [ ] Playwright API tests against a running n8n (`@playwright/test` is already installed; CI does not start n8n or download browsers)
-
-## After you pull
-
-Your n8n database still has the previous workflow until you re-import.
-
-1. Re-import `workflows/WF-01-intake.json` (same workflow id `fz6i57gKSkm623vw`).
-2. Recreate or reattach credential `X_API_KEY` (header name `X_API_KEY`) and credential `Salesforce Client Credentials`.
-3. Replace `your-org` in the Lead URL. Activate the workflow.
-4. Copy `.env.example` to `.env` if you do not already have one. Set `INTAKE_KEY` to that header value.
-5. Point `web/form.html` `API_KEY` at the same value for browser tests, and leave that change uncommitted.

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
-// The n8n Code node repeats the required-field rules inline. n8n does not load
-// this package. Email format is enforced here and covered by tests.
+// The n8n Code node inlines this same pattern. n8n does not load this package.
+export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const REQUIRED_FIELDS = ['name', 'email', 'company'] as const;
 
 const requiredText = (field: string) =>
@@ -17,7 +17,7 @@ const optionalText = z.preprocess(
 
 export const leadSchema = z.object({
   name: requiredText('name'),
-  email: requiredText('email').pipe(z.email({ error: 'email is invalid' })),
+  email: requiredText('email').regex(EMAIL_PATTERN, { error: 'email is invalid' }),
   company: requiredText('company'),
   website: optionalText,
   service: optionalText,

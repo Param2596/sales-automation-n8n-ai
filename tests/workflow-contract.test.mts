@@ -3,7 +3,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, it } from 'node:test';
 
-import { REQUIRED_FIELDS } from '../scripts/intake/validate.mts';
+import { EMAIL_PATTERN, REQUIRED_FIELDS } from '../scripts/intake/validate.mts';
 
 const root = join(import.meta.dirname, '..');
 const workflowPath = join(root, 'workflows', 'WF-01-intake.json');
@@ -50,6 +50,8 @@ describe('WF-01 intake export', () => {
     const code = String(validate.parameters.jsCode);
     assert.match(code, /const field of \['name', 'email', 'company'\]/);
     assert.match(code, /\$\{field\} is required/);
+    assert.ok(code.includes(EMAIL_PATTERN.source));
+    assert.match(code, /email is invalid/);
     assert.deepEqual([...REQUIRED_FIELDS], ['name', 'email', 'company']);
 
     const gate = node('Valid?');
@@ -126,6 +128,13 @@ describe('committed files', () => {
       assert.ok(eq > 0, `expected NAME= in .env.example, got ${trimmed}`);
       assert.equal(trimmed.slice(eq + 1).trim(), '');
     }
+
+    const form = readFileSync(join(root, 'web/form.html'), 'utf8');
+    assert.equal(form.includes('dev-only-key'), false);
+    assert.doesNotMatch(form, /const API_KEY/);
+    assert.match(form, /type="password"/);
+    assert.match(form, /URLSearchParams/);
+    assert.match(form, /X_API_KEY/);
 
     const ignore = readFileSync(join(root, '.gitignore'), 'utf8');
     for (const entry of ['.env', 'node_modules/', '.n8n/', 'reports/']) {

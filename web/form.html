@@ -18,10 +18,10 @@
   <p class="note">
     Local demo for SOC, MDR, EDR, DLP, Email Security, Pentest, and Incident Response.
     The form POSTs JSON to the n8n webhook with header <code>X_API_KEY</code>.
-    The key below is a placeholder. Set it to the same value as the n8n Header Auth credential.
-    Keep a real key out of any page you deploy.
+    Type the same key as the n8n Header Auth credential. Opening this page with <code>?key=</code> fills that field for the session. The page does not contain a key.
   </p>
   <form id="lead-form">
+    <label>API key <input id="api-key" type="password" autocomplete="off" required /></label>
     <label>Name <input name="name" required /></label>
     <label>Email <input name="email" type="email" required /></label>
     <label>Company <input name="company" required /></label>
@@ -39,17 +39,24 @@
 
   <script>
     const WEBHOOK_URL = "http://localhost:5678/webhook/lead";
-    const API_KEY = "dev-only-key"; // local placeholder; must match the n8n X_API_KEY credential
+    const keyInput = document.getElementById("api-key");
+    const keyFromQuery = new URLSearchParams(location.search).get("key");
+    if (keyFromQuery) keyInput.value = keyFromQuery;
 
     document.getElementById("lead-form").addEventListener("submit", async (e) => {
       e.preventDefault();
       const data = Object.fromEntries(new FormData(e.target));
+      const apiKey = keyInput.value.trim();
       const out = document.getElementById("result");
+      if (!apiKey) {
+        out.textContent = "Enter the API key.";
+        return;
+      }
       out.textContent = "Sending...";
       try {
         const res = await fetch(WEBHOOK_URL, {
           method: "POST",
-          headers: { "Content-Type": "application/json", "X_API_KEY": API_KEY },
+          headers: { "Content-Type": "application/json", "X_API_KEY": apiKey },
           body: JSON.stringify(data),
         });
         const text = await res.text();
