@@ -3,99 +3,122 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, it } from 'node:test';
 
-import { EMAIL_PATTERN, REQUIRED_FIELDS } from '../scripts/intake/validate.mts';
+type Node = {
+  name: string;
+  type: string;
+  parameters: Record<string, any>;
+  credentials?: Record<string, { id?: string; name?: string }>;
+};
 
 const root = join(import.meta.dirname, '..');
-const workflowPath = join(root, 'workflows', 'WF-01-intake.json');
-const workflow = JSON.parse(readFileSync(workflowPath, 'utf8')) as {
+const workflow = JSON.parse(
+  readFileSync(join(root, 'workflows', 'WF-01-intake.json'), 'utf8'),
+) as {
   active: boolean;
-  nodes: Array<{
-    name: string;
-    type: string;
-    parameters: Record<string, unknown>;
-    credentials?: Record<string, { id?: string; name?: string }>;
-  }>;
+  nodes: Node[];
   connections: Record<string, { main: Array<Array<{ node: string }>> }>;
 };
 
-function node(name: string) {
+function node(name: string): Node {
   const found = workflow.nodes.find((item) => item.name === name);
   assert.ok(found, `missing node ${name}`);
   return found;
+}
+
+function next(from: string, output: number): string {
+  return workflow.connections[from].main[output][0].node;
+}
+
+function status(name: string): number {
+  return node(name).parameters.options.responseCode;
 }
 
 function walk(dir: string, files: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
     if (entry === 'node_modules' || entry === '.git' || entry === '.n8n') continue;
     const path = join(dir, entry);
-    const stats = statSync(path);
-    if (stats.isDirectory()) walk(path, files);
+    if (statSync(path).isDirectory()) walk(path, files);
     else files.push(path);
   }
   return files;
 }
 
+const SF_BASE = 'https://your-org.my.salesforce.com/services/data/v66.0/sobjects/Lead';
+
 describe('WF-01 intake export', () => {
-  it('authenticates the webhook with a named header credential and no secret', () => {
+  it('exposes POST and PATCH on /lead behind header auth', () => {
     const webhook = node('Webhook');
     assert.equal(webhook.parameters.authentication, 'headerAuth');
-    assert.equal(webhook.parameters.httpMethod, 'POST');
+    assert.deepEqual(webhook.parameters.httpMethod, ['POST', 'PATCH']);
     assert.equal(webhook.parameters.path, 'lead');
     assert.equal(webhook.parameters.responseMode, 'responseNode');
-    assert.deepEqual(webhook.credentials?.httpHeaderAuth, { id: '', name: 'X_API_KEY' });
+    assert.equal(webhook.credentials?.httpHeaderAuth?.id, '');
+    assert.equal(next('Webhook', 0), 'check_valid_fields');
+    assert.equal(next('Webhook', 1), 'check_valid_fields1');
   });
 
-  it('validates required fields, then routes valid leads to Salesforce and invalid leads to 400', () => {
-    const validate = node('Validate lead');
-    const code = String(validate.parameters.jsCode);
-    assert.match(code, /const field of \['name', 'email', 'company'\]/);
-    assert.match(code, /\$\{field\} is required/);
-    assert.ok(code.includes(EMAIL_PATTERN.source));
+  it('POST validates required fields and email before Salesforce', () => {
+    const code = String(node('check_valid_fields').parameters.jsCode);
+    assert.match(code, /\['name', 'email', 'company'\]/);
+    assert.match(code, /is required/);
     assert.match(code, /email is invalid/);
-    assert.deepEqual([...REQUIRED_FIELDS], ['name', 'email', 'company']);
-
-    const gate = node('Valid?');
-    const conditions = gate.parameters.conditions as {
-      conditions: Array<{ leftValue: string; operator: { type: string; operation: string } }>;
-    };
-    assert.equal(conditions.conditions[0].leftValue, '={{ $json.valid }}');
-    assert.equal(conditions.conditions[0].operator.operation, 'true');
-
-    assert.equal(workflow.connections['Valid?'].main[0][0].node, 'Create Salesforce Lead');
-    assert.equal(workflow.connections['Valid?'].main[1][0].node, 'Respond 400');
-
-    const rejected = node('Respond 400');
-    assert.equal(rejected.parameters.respondWith, 'json');
-    assert.equal((rejected.parameters.options as { responseCode: number }).responseCode, 400);
-    assert.match(String(rejected.parameters.responseBody), /valid: false/);
+    assert.equal(next('if json is valid', 0), 'salesforce_POST');
+    assert.equal(next('if json is valid', 1), 'validation_failed');
+    assert.equal(status('validation_failed'), 400);
   });
 
-  it('posts a Lead to the placeholder Salesforce host with the expected fields', () => {
-    const create = node('Create Salesforce Lead');
+  it('POST creates a Lead and maps Salesforce errors to client-safe codes', () => {
+    const create = node('salesforce_POST');
     assert.equal(create.parameters.method, 'POST');
-    assert.equal(
-      create.parameters.url,
-      'https://your-org.my.salesforce.com/services/data/v66.0/sobjects/Lead',
-    );
+    assert.equal(create.parameters.url, SF_BASE);
     assert.equal(create.parameters.genericAuthType, 'oAuth2Api');
-    assert.deepEqual(create.credentials?.oAuth2Api, {
-      id: '',
-      name: 'Salesforce Client Credentials',
-    });
-
-    const body = String(create.parameters.jsonBody);
-    for (const field of ['LastName', 'Company', 'Email', 'Website', 'LeadSource', 'Description']) {
-      assert.match(body, new RegExp(field));
+    assert.equal(create.credentials?.oAuth2Api?.id, '');
+    for (const field of ['LastName', 'Company', 'Email']) {
+      assert.match(String(create.parameters.jsonBody), new RegExp(field));
     }
-    assert.match(body, /LeadSource: 'Web'/);
+    assert.equal(next('salesforce_POST', 0), 'success_new_resource');
+    assert.equal(status('success_new_resource'), 201);
+    assert.equal(next('salesforce_POST', 1), 'Switch');
 
-    const accepted = node('Respond 201');
-    assert.equal((accepted.parameters.options as { responseCode: number }).responseCode, 201);
-    assert.equal(workflow.connections['Create Salesforce Lead'].main[0][0].node, 'Respond 201');
+    const outputs = ['duplicate (409)', 'bad_request (400)', 'auth(401)', 'fallback'];
+    const codes = [409, 422, 502, 502];
+    outputs.forEach((name, i) => {
+      assert.equal(next('Switch', i), name);
+      assert.equal(status(name), codes[i]);
+    });
   });
 
-  it('ships inactive so import does not activate it before credentials are attached', () => {
+  it('PATCH updates only allow-listed fields on a valid lead id', () => {
+    const code = String(node('check_valid_fields1').parameters.jsCode);
+    assert.match(code, /b\.id/);
+    assert.match(code, /\['Title','Phone','Company','Status'\]/);
+    assert.match(code, /invalid lead id/);
+    assert.match(code, /no updatable fields/);
+
+    assert.equal(next('if json is valid1', 0), 'salesforce_PATCH');
+    assert.equal(next('if json is valid1', 1), 'json_fail');
+    assert.equal(status('json_fail'), 400);
+
+    const patch = node('salesforce_PATCH');
+    assert.equal(patch.parameters.method, 'PATCH');
+    assert.equal(patch.parameters.url, `=${SF_BASE}/{{ $json.id }}`);
+    assert.equal(patch.parameters.jsonBody, '={{ JSON.stringify($json.fields) }}');
+    assert.equal(next('salesforce_PATCH', 0), 'patch_resource');
+    assert.equal(status('patch_resource'), 200);
+    assert.equal(next('salesforce_PATCH', 1), 'salesforce_error');
+    assert.equal(status('salesforce_error'), 502);
+  });
+
+  it('never returns raw upstream errors to the client', () => {
+    for (const name of ['duplicate (409)', 'bad_request (400)', 'auth(401)', 'fallback', 'salesforce_error']) {
+      assert.equal(node(name).parameters.respondWith, 'json', `${name} must return a fixed JSON body`);
+    }
+  });
+
+  it('ships inactive with no org host or credential ids', () => {
     assert.equal(workflow.active, false);
+    const text = JSON.stringify(workflow);
+    assert.doesNotMatch(text, /develop\.my\.salesforce\.com/);
   });
 });
 

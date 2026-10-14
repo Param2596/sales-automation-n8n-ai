@@ -3,7 +3,11 @@
   "nodes": [
     {
       "parameters": {
-        "httpMethod": "POST",
+        "multipleMethods": true,
+        "httpMethod": [
+          "POST",
+          "PATCH"
+        ],
         "path": "lead",
         "authentication": "headerAuth",
         "responseMode": "responseNode",
@@ -20,37 +24,10 @@
       "webhookId": "2fe08759-1b31-4e9a-bbe0-6fae417e291f",
       "credentials": {
         "httpHeaderAuth": {
-          "id": "hybT6fmIP3Yqhddn",
+          "id": "",
           "name": "Header Auth account"
         }
       }
-    },
-    {
-      "parameters": {
-        "method": "POST",
-        "url": "https://orgfarm-c069ee9580-dev-ed.develop.my.salesforce.com/services/data/v66.0/sobjects/Lead",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "oAuth2Api",
-        "sendBody": true,
-        "specifyBody": "json",
-        "jsonBody": "={\n  \"LastName\": \"{{ $json.name }}\",\n  \"Email\": \"{{ $json.email }}\",\n  \"Company\": \"{{ $json.company }}\",\n  \"Website\": \"{{ $json.website }}\",\n  \"LeadSource\": \"Web\",\n  \"Description\": \"Service: {{ $json.service }} - {{ $json.message }}\"\n}",
-        "options": {}
-      },
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.5,
-      "position": [
-        288,
-        -256
-      ],
-      "id": "2c3cb773-70a2-4fea-bb35-4b4c462300c4",
-      "name": "HTTP Request1",
-      "credentials": {
-        "oAuth2Api": {
-          "id": "FX8oJuYAaxhhwTeg",
-          "name": "salesforce-client-credentials"
-        }
-      },
-      "onError": "continueErrorOutput"
     },
     {
       "parameters": {
@@ -172,8 +149,8 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.4,
       "position": [
-        608,
-        -240
+        656,
+        -32
       ],
       "id": "32bf970c-29ab-4da1-b086-92470d69d863",
       "name": "Switch"
@@ -189,8 +166,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        928,
-        -336
+        912,
+        -288
       ],
       "id": "ec1cee5f-661e-4567-b53a-716f192f27d7",
       "name": "duplicate (409)"
@@ -240,8 +217,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        592,
-        -464
+        608,
+        -224
       ],
       "id": "c77e1593-c957-4b73-922e-e80765e000c5",
       "name": "success_new_resource"
@@ -258,7 +235,7 @@
       "typeVersion": 1.5,
       "position": [
         912,
-        192
+        176
       ],
       "id": "77908db7-39d8-44eb-9097-f1712731ff77",
       "name": "fallback"
@@ -291,9 +268,159 @@
       ],
       "id": "8113514e-0ed4-41fc-8c0a-e835332787a0",
       "name": "check_valid_fields"
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $input.first().json.body ?? {};\nconst id = String(b.id ?? '').trim();\nconst allowed = ['Title','Phone','Company','Status'];\nconst fields = {};\nfor (const k of allowed) if (b[k] !== undefined) fields[k] = b[k];\nconst errors = [];\nif (id.length !== 15 && id.length !== 18) errors.push('invalid lead id');\nif (Object.keys(fields).length === 0) errors.push('no updatable fields');\nreturn [{ json: { id, fields, valid: errors.length === 0, errors } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -272,
+        224
+      ],
+      "id": "58f55d45-9798-4670-a3dd-8437f154435e",
+      "name": "check_valid_fields1"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ce1deb44-9aa4-492c-9cf2-6f18f10fe5fb",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -48,
+        224
+      ],
+      "id": "0a0e9c3b-d538-414d-98b5-69dd894ae0e9",
+      "name": "if json is valid1"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ updated: $('check_valid_fields1').item.json.id }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        432,
+        144
+      ],
+      "id": "104c4f81-6ad2-4062-ac9b-4171a2665c69",
+      "name": "patch_resource"
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        368,
+        464
+      ],
+      "id": "7256192a-c6a7-4a53-81eb-92f8174f55d0",
+      "name": "json_fail"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, error: \"salesforce_rejected\" }) }}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        368,
+        320
+      ],
+      "id": "0ad7d765-4ca3-4b32-9486-3398eb581fe8",
+      "name": "salesforce_error"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://your-org.my.salesforce.com/services/data/v66.0/sobjects/Lead/{{ $json.id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.fields) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        160,
+        160
+      ],
+      "id": "b15a786d-7e4b-4e21-a23d-66e1e433c55f",
+      "name": "salesforce_PATCH",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "",
+          "name": "salesforce-client-credentials"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://your-org.my.salesforce.com/services/data/v66.0/sobjects/Lead",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"LastName\": \"{{ $json.name }}\",\n  \"Email\": \"{{ $json.email }}\",\n  \"Company\": \"{{ $json.company }}\",\n  \"Website\": \"{{ $json.website }}\",\n  \"LeadSource\": \"Web\",\n  \"Description\": \"Service: {{ $json.service }} - {{ $json.message }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        288,
+        -256
+      ],
+      "id": "2c3cb773-70a2-4fea-bb35-4b4c462300c4",
+      "name": "salesforce_POST",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "",
+          "name": "salesforce-client-credentials"
+        }
+      },
+      "onError": "continueErrorOutput"
     }
   ],
-  "pinData": {},
   "connections": {
     "Webhook": {
       "main": [
@@ -303,21 +430,10 @@
             "type": "main",
             "index": 0
           }
-        ]
-      ]
-    },
-    "HTTP Request1": {
-      "main": [
-        [
-          {
-            "node": "success_new_resource",
-            "type": "main",
-            "index": 0
-          }
         ],
         [
           {
-            "node": "Switch",
+            "node": "check_valid_fields1",
             "type": "main",
             "index": 0
           }
@@ -328,7 +444,7 @@
       "main": [
         [
           {
-            "node": "HTTP Request1",
+            "node": "salesforce_POST",
             "type": "main",
             "index": 0
           }
@@ -389,19 +505,79 @@
           }
         ]
       ]
+    },
+    "check_valid_fields1": {
+      "main": [
+        [
+          {
+            "node": "if json is valid1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "if json is valid1": {
+      "main": [
+        [
+          {
+            "node": "salesforce_PATCH",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "json_fail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "salesforce_PATCH": {
+      "main": [
+        [
+          {
+            "node": "patch_resource",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "salesforce_error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "salesforce_POST": {
+      "main": [
+        [
+          {
+            "node": "success_new_resource",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "active": true,
+  "active": false,
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "84ac7938-71db-49b9-93eb-531121f2a123",
-  "meta": {
-    "templateCredsSetupCompleted": true,
-    "instanceId": "1e15df1235ca01bba0f09571b6baee0756bb21ca4c3e6bcbcf2c14e6912fb688"
-  },
   "nodeGroups": [],
-  "id": "fz6i57gKSkm623vw",
-  "tags": []
+  "tags": [],
+  "pinData": {}
 }
