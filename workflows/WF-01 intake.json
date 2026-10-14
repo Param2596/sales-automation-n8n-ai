@@ -1,0 +1,407 @@
+{
+  "name": "WF-01 intake",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        -528,
+        -80
+      ],
+      "id": "d02ff5ee-1258-4b6e-ae4b-5ace0de8cb61",
+      "name": "Webhook",
+      "webhookId": "2fe08759-1b31-4e9a-bbe0-6fae417e291f",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "hybT6fmIP3Yqhddn",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://orgfarm-c069ee9580-dev-ed.develop.my.salesforce.com/services/data/v66.0/sobjects/Lead",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"LastName\": \"{{ $json.name }}\",\n  \"Email\": \"{{ $json.email }}\",\n  \"Company\": \"{{ $json.company }}\",\n  \"Website\": \"{{ $json.website }}\",\n  \"LeadSource\": \"Web\",\n  \"Description\": \"Service: {{ $json.service }} - {{ $json.message }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        288,
+        -256
+      ],
+      "id": "2c3cb773-70a2-4fea-bb35-4b4c462300c4",
+      "name": "HTTP Request1",
+      "credentials": {
+        "oAuth2Api": {
+          "id": "FX8oJuYAaxhhwTeg",
+          "name": "salesforce-client-credentials"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ce1deb44-9aa4-492c-9cf2-6f18f10fe5fb",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -16,
+        -80
+      ],
+      "id": "e7728acc-64ee-4405-a3a0-0f97baaf4cb1",
+      "name": "if json is valid"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.error.message }}",
+                    "rightValue": "DUPLICATES_DETECTED",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "da687525-e5d4-4120-9627-530a0bfc4c5d"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "duplicate"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "be92997b-dcff-4a80-9af5-058778dbc433",
+                    "leftValue": "={{ $json.error.status }}",
+                    "rightValue": 400,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "400"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "b37fe3c8-5561-4263-90c0-86978cec65b7",
+                    "leftValue": "={{ $json.error.status }}",
+                    "rightValue": "401",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "401"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        608,
+        -240
+      ],
+      "id": "32bf970c-29ab-4da1-b086-92470d69d863",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, error: \"duplicate_lead\" }) }}",
+        "options": {
+          "responseCode": 409
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        928,
+        -336
+      ],
+      "id": "ec1cee5f-661e-4567-b53a-716f192f27d7",
+      "name": "duplicate (409)"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, error: \"salesforce_rejected\" }) }}",
+        "options": {
+          "responseCode": 422
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        912,
+        -144
+      ],
+      "id": "239c0bf1-bafe-41da-8ab3-bcc270a84a7e",
+      "name": "bad_request (400)"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, error: \"upstream_auth_failed\" }) }}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        912,
+        16
+      ],
+      "id": "2f3ab4fa-5509-443a-8fa0-ac6443b6a2b6",
+      "name": "auth(401)"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: true, leadId: $json.id }) }}",
+        "options": {
+          "responseCode": 201
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        592,
+        -464
+      ],
+      "id": "c77e1593-c957-4b73-922e-e80765e000c5",
+      "name": "success_new_resource"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, error: \"upstream_error\" }) }}",
+        "options": {
+          "responseCode": 502
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        912,
+        192
+      ],
+      "id": "77908db7-39d8-44eb-9097-f1712731ff77",
+      "name": "fallback"
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        288,
+        -64
+      ],
+      "id": "f8fe9bd2-7fa7-41ef-8ab7-dadb745c5257",
+      "name": "validation_failed"
+    },
+    {
+      "parameters": {
+        "jsCode": "const b = $input.first().json.body ?? {};\nconst errors = [];\n\nfor (const f of ['name', 'email', 'company']) {\n  if (!b[f] || String(b[f]).trim() === '') errors.push(`${f} is required`);\n}\n\nconst e = String(b.email ?? '').trim();\nconst at = e.indexOf('@');\nconst domain = e.slice(at + 1);\nconst validEmail =\n  at > 0 &&\n  at === e.lastIndexOf('@') &&\n  !e.includes(' ') &&\n  domain.includes('.') &&\n  !domain.startsWith('.') &&\n  !domain.endsWith('.');\n\nif (e && !validEmail) errors.push('email is invalid');\n\nreturn [{ json: { ...b, email: e.toLowerCase(), valid: errors.length === 0, errors } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -272,
+        -80
+      ],
+      "id": "8113514e-0ed4-41fc-8c0a-e835332787a0",
+      "name": "check_valid_fields"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "check_valid_fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "success_new_resource",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "if json is valid": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "validation_failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "duplicate (409)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "bad_request (400)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "auth(401)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "fallback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "validation_failed": {
+      "main": [
+        []
+      ]
+    },
+    "check_valid_fields": {
+      "main": [
+        [
+          {
+            "node": "if json is valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "84ac7938-71db-49b9-93eb-531121f2a123",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "1e15df1235ca01bba0f09571b6baee0756bb21ca4c3e6bcbcf2c14e6912fb688"
+  },
+  "nodeGroups": [],
+  "id": "fz6i57gKSkm623vw",
+  "tags": []
+}
